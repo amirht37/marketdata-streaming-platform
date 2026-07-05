@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.log
+*.db
+*.sqlite
+*.avro
+*.json
+.env
+.venv/
+kafka-data/
+tmp/
+
