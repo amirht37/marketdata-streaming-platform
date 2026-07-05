@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "MarketStats",
+  "namespace": "public.marketstats",
+  "fields": [
+    { "name": "symbol", "type": "string" },
+    { "name": "isClosed", "type": "boolean" },
+    { "name": "bestSell", "type": "double" },
+    { "name": "bestBuy", "type": "double" },
+    { "name": "volumeSrc", "type": "double" },
+    { "name": "volumeDst", "type": "double" },
+    { "name": "latest", "type": "double" },
+    { "name": "mark", "type": "double" },
+    { "name": "dayLow", "type": "double" },
+    { "name": "dayHigh", "type": "double" },
+    { "name": "dayOpen", "type": "double" },
+    { "name": "dayClose", "type": "double" },
+    { "name": "dayChange", "type": "double" },
+    { "name": "offset", "type": "long" }
+  ]
+}
+

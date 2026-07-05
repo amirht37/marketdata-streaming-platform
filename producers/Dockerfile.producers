@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 1. Cache dependencies inside the image layer
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 2. Copy your local scripts into the container workspace
+COPY . .
+
+# ─── THE PERMANENT FIX ───
+# This instructs Python to immediately run your script unbuffered on boot
+CMD ["sh", "-c", "python -u ${PRODUCER_SCRIPT}"]

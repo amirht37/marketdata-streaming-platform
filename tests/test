@@ -1,0 +1,67 @@
+import asyncio
+import websockets
+import json
+import time
+
+NOBITEX_WS_URL = "wss://ws.nobitex.ir/connection/websocket"
+
+COINS = ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "TRX"]
+QUOTES = ["USDT", "IRT"]
+
+MARKETS = [f"{c}{q}" for c in COINS for q in QUOTES]
+
+
+async def stream_market(symbol):
+    channel_name = f"public:market-stats-{symbol}"
+
+    # Stagger startup by 1 second
+    await asyncio.sleep(0.2)
+
+    while True:
+        try:
+            print(f"[CONNECT] {channel_name}")
+
+            async with websockets.connect(NOBITEX_WS_URL, ping_interval=None) as ws:
+
+                # 1) Handshake
+                await ws.send(json.dumps({"connect": {}, "id": 1}))
+                await ws.recv()
+                print(f"[HANDSHAKE OK] {channel_name}")
+
+                # 2) Subscribe
+                sub_payload = {"id": 2, "subscribe": {"channel": channel_name}}
+                await ws.send(json.dumps(sub_payload))
+                print(f"[SUBSCRIBED] {channel_name}")
+
+                # 3) Stream loop
+                while True:
+                    msg = await ws.recv()
+
+                    # Heartbeat
+                    if msg == "{}":
+                        await ws.send("{}")
+                        continue
+
+                    data = json.loads(msg)
+
+                    if "push" in data:
+                        pub = data["push"]["pub"]["data"]
+                        if isinstance(pub, str):
+                            pub = json.loads(pub)
+
+                        print(f"[DATA] {channel_name}: {str(pub)[:120]}...")
+
+        except Exception as e:
+            print(f"[ERROR] {channel_name}: {e}")
+            print(f"[RECONNECT] {channel_name} in 2 seconds...")
+            await asyncio.sleep(2)
+            continue
+
+
+async def main():
+    tasks = [asyncio.create_task(stream_market(m)) for m in MARKETS]
+    await asyncio.gather(*tasks)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

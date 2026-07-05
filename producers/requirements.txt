@@ -1,0 +1,8 @@
+kafka-python-ng
+websocket-client
+requests
+centrifuge-python==0.4.4
+prometheus-client
+python-json-logger
+confluent-kafka
+fastavro

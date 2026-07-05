@@ -1,0 +1,39 @@
+{
+  "type": "record",
+  "name": "Orderbook",
+  "namespace": "public.orderbook",
+  "fields": [
+    { "name": "symbol", "type": "string" },
+    { "name": "lastUpdate", "type": "long" },
+    { "name": "lastTradePrice", "type": "double" },
+    {
+      "name": "bids",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Bid",
+          "fields": [
+            { "name": "price", "type": "double" },
+            { "name": "amount", "type": "double" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "asks",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Ask",
+          "fields": [
+            { "name": "price", "type": "double" },
+            { "name": "amount", "type": "double" }
+          ]
+        }
+      }
+    },
+    { "name": "offset", "type": "long" }
+  ]
+}

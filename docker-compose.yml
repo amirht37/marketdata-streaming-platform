@@ -1,0 +1,234 @@
+  version: '3.8'
+
+  services:
+    # --- THE BROKER (KRaft Mode Engine) ---
+    kafka:
+      image: apache/kafka:3.7.0
+      container_name: kafka_broker
+      ports:
+        - "9092:9092" # Exposes the host listener channel directly to port 9092 on your laptop
+      environment:
+        - KAFKA_NODE_ID=1
+        - KAFKA_PROCESS_ROLES=broker,controller
+        - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+        # ─── THE CRITICAL LISTENER FIX ───
+        # Define three distinct communication targets
+        - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+        # Route container internal traffic on 29092 and external host terminal traffic on 127.0.0.1:9092
+        - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://127.0.0.1:9092
+        - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+        - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+        - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+        - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      volumes:
+        - kafka_data:/var/lib/kafka/data
+      networks:
+        - streaming-network
+      restart: always
+
+
+    kafka-ui:
+      image: provectuslabs/kafka-ui:latest
+      container_name: kafka-ui
+      ports:
+        - "8090:8080"
+      environment:
+        KAFKA_CLUSTERS_0_NAME: local
+        KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+        KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      depends_on:
+        - kafka
+      networks:
+        - streaming-network
+
+
+
+    postgres:
+      image: postgres:16
+      container_name: crypto-postgres
+      environment:
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_DB: ${POSTGRES_DB}
+      volumes:
+       - postgres_data:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+        interval: 5s
+        timeout: 5s
+        retries: 10
+      restart: always
+      networks:
+        - streaming-network
+    # --- THE PRODUCER (Async Network Worker) ---
+    crypto-producer:
+      build:
+        context: ./producers  # Looks at the root directory workspace
+        dockerfile: Dockerfile.producers  # Bakes your class-based async script
+      depends_on:
+        - kafka
+      ports:
+        - "8000:8000"
+      environment:
+        # Match the exact internal bridge listener port defined above
+        - KAFKA_BROKER=kafka:29092 
+        - PYTHONUNBUFFERED=1 
+        - PRODUCER_SCRIPT=main.py
+      restart: always
+      volumes:
+        - ./logs:/app/logs
+        - ./schemas:/app/schemas
+      networks:
+        - streaming-network
+
+   
+
+    x-consumer-base: &consumer-base
+      build:
+        context: ./consumers
+        dockerfile: Dockerfile
+      restart: always
+      networks:
+        - streaming-network
+      environment:
+        POSTGRES_USER: crypto
+        POSTGRES_PASSWORD: crypto123
+        POSTGRES_DB: crypto_db
+        POSTGRES_HOST: postgres
+        POSTGRES_PORT: 5432
+        KAFKA_BOOTSTRAP: kafka:9092
+        SCHEMA_REGISTRY_URL: http://schema-registry:8081
+
+    orderbooks-postgres-consumer:
+      <<: *consumer-base
+      command: ["python", "consumers/postgres/orderbooks/app.py"]
+      depends_on:
+        - kafka
+        - postgres
+
+      
+
+
+
+    prometheus:
+      image: prom/prometheus
+      ports:
+        - "9090:9090"
+      volumes:
+        - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      networks:
+        - streaming-network
+    # ─── THE NEW COLUMNAR OLAP DATABASE (Stable LTS Branch) ───
+    clickhouse:
+      image: clickhouse/clickhouse-server:25.8
+      container_name: iot-clickhouse
+      ports:
+        - "8123:8123" # HTTP Interface for Grafana metrics scraping
+        - "9000:9000" # Native TCP client connection port
+      environment:
+        - CLICKHOUSE_DB=crypto_telemetry
+        - CLICKHOUSE_USER=clickhouse_admin
+        - CLICKHOUSE_PASSWORD=clickhouse_secure_pass
+      volumes:
+        - clickhouse_data:/var/lib/clickhouse
+      networks:
+        - streaming-network
+      restart: always
+
+    node_exporter:
+      image: prom/node-exporter:latest
+      container_name: node_exporter
+      pid: host
+      network_mode: host
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      volumes:
+        - /proc:/host/proc:ro
+        - /sys:/host/sys:ro
+        - /:/rootfs:ro
+      command:
+        - '--path.procfs=/host/proc'
+        - '--path.sysfs=/host/sys'
+        - '--path.rootfs=/rootfs'
+      restart: unless-stopped
+
+    cadvisor:
+      image: gcr.io/cadvisor/cadvisor:latest
+      container_name: cadvisor
+      ports:
+        - "8080:8080"
+      volumes:
+        - /:/rootfs:ro
+        - /var/run:/var/run:ro
+        - /sys:/sys:ro
+        - /var/lib/docker/:/var/lib/docker:ro
+      restart: unless-stopped
+      networks:
+        - streaming-network
+
+  
+      
+
+    grafana:
+      image: grafana/grafana-oss:latest
+      container_name: crypto-grafana
+      ports:
+        - "3001:3000"
+      environment:
+        - GF_SECURITY_ADMIN_PASSWORD=admin
+        - DB_PASSWORD=admin
+      volumes:
+        - grafana_data:/var/lib/grafana
+        - ./dashboards:/etc/grafana/provisioning/dashboards
+        - ./dashboards/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      restart: unless-stopped
+      networks:
+        - streaming-network
+    loki:
+      image: grafana/loki:2.9.0
+      container_name: crypto-loki
+      ports:
+        - "3100:3100"
+      volumes:
+        - ./loki/config.yaml:/etc/loki/config.yaml
+        - ./loki-data:/loki
+        - ./loki-data/wal:/wal
+      command: -config.file=/etc/loki/config.yaml
+      networks:
+        - streaming-network
+
+
+    promtail:
+      image: grafana/promtail:2.8.2
+      container_name: crypto-promtail
+      volumes:
+        - ./logs:/var/log/central_hub:ro     
+        - ./promtail:/etc/promtail
+      command: -config.file=/etc/promtail/config.yaml
+      user: "root"
+      restart: unless-stopped
+      depends_on:
+        - loki
+      networks:
+        - streaming-network
+
+
+
+  volumes:
+    kafka_data:
+      driver: local
+    # Permanent storage disk anchor for ClickHouse columnar metrics data
+    clickhouse_data:
+      driver: local
+
+    grafana_data:
+      driver: local
+
+    postgres_data:
+      driver: local
+
+  networks:
+    streaming-network:
+      driver: bridge

@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "Candle",
+  "namespace": "public.candle",
+  "fields": [
+    { "name": "symbol", "type": "string" },
+    { "name": "resolution", "type": "string" },
+    { "name": "ts", "type": "long" },
+    { "name": "open", "type": "double" },
+    { "name": "high", "type": "double" },
+    { "name": "low", "type": "double" },
+    { "name": "close", "type": "double" },
+    { "name": "volume", "type": "double" },
+    { "name": "offset", "type": "long" }
+  ]
+}
+

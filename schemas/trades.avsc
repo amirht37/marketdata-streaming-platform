@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "Trade",
+  "namespace": "public.trades",
+  "fields": [
+    { "name": "symbol", "type": "string" },
+    { "name": "price", "type": "double" },
+    { "name": "volume", "type": "double" },
+    { "name": "side", "type": "string" },
+    { "name": "ts", "type": "long" },
+    { "name": "offset", "type": "long" }
+  ]
+}
+
