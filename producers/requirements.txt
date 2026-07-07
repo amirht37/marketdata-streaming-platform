@@ -6,3 +6,6 @@ prometheus-client
 python-json-logger
 confluent-kafka
 fastavro
+confluent-kafka[schema-registry]>=2.3.0
+httpx>=0.27.0
+authlib>=1.3.0

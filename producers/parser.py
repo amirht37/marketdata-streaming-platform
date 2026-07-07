@@ -1,9 +1,36 @@
-import logging
+import time
 
-logger = logging.getLogger(__name__)
+from prometheus_client import Counter, Histogram
+
+from Logger import log_parser
+
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics
+# ---------------------------------------------------------------------------
+
+PARSE_TOTAL = Counter(
+    "parse_messages_total",
+    "Number of messages parsed, by channel type and outcome",
+    ["channel_type", "outcome"],  # outcome: success | error
+)
+
+PARSE_ERRORS_TOTAL = Counter(
+    "parse_errors_total",
+    "Number of parse failures, by channel type and error kind",
+    ["channel_type", "error_type"],  # error_type: KeyError | ValueError | TypeError | unknown_channel | root_malformed
+)
+
+PARSE_DURATION_SECONDS = Histogram(
+    "parse_duration_seconds",
+    "Time spent parsing a single raw message into a normalized record",
+    ["channel_type"],
+    buckets=(0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5),
+)
 
 
 def parse_orderbook(msg):
+    started_at = time.time()
     try:
         push = msg["push"]
         channel = push["channel"]
@@ -24,15 +51,22 @@ def parse_orderbook(msg):
             "asks": asks,
             "offset": offset
         }
+
+        PARSE_TOTAL.labels(channel_type="orderbook", outcome="success").inc()
         return record, "orderbook"
 
     except (KeyError, ValueError, TypeError) as e:
-        logger.error("parse_orderbook_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        log_parser.error("parse_orderbook_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        PARSE_TOTAL.labels(channel_type="orderbook", outcome="error").inc()
+        PARSE_ERRORS_TOTAL.labels(channel_type="orderbook", error_type=type(e).__name__).inc()
         return None, None
+    finally:
+        PARSE_DURATION_SECONDS.labels(channel_type="orderbook").observe(time.time() - started_at)
 
 
 
 def parse_candle(msg):
+    started_at = time.time()
     try:
         push = msg["push"]
         channel = push["channel"]
@@ -56,15 +90,21 @@ def parse_candle(msg):
             "offset": offset
         }
 
+        PARSE_TOTAL.labels(channel_type="candle", outcome="success").inc()
         return record, "candle"
 
     except (KeyError, ValueError, TypeError) as e:
-        logger.error("parse_candle_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        log_parser.error("parse_candle_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        PARSE_TOTAL.labels(channel_type="candle", outcome="error").inc()
+        PARSE_ERRORS_TOTAL.labels(channel_type="candle", error_type=type(e).__name__).inc()
         return None, None
+    finally:
+        PARSE_DURATION_SECONDS.labels(channel_type="candle").observe(time.time() - started_at)
 
 
 
 def parse_market_stats(msg):
+    started_at = time.time()
     try:
         push = msg["push"]
         channel = push["channel"]
@@ -91,15 +131,21 @@ def parse_market_stats(msg):
             "offset": offset
         }
 
+        PARSE_TOTAL.labels(channel_type="market-stats", outcome="success").inc()
         return record, "market-stats"
 
     except (KeyError, ValueError, TypeError) as e:
-        logger.error("parse_market_stats_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        log_parser.error("parse_market_stats_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        PARSE_TOTAL.labels(channel_type="market-stats", outcome="error").inc()
+        PARSE_ERRORS_TOTAL.labels(channel_type="market-stats", error_type=type(e).__name__).inc()
         return None, None
+    finally:
+        PARSE_DURATION_SECONDS.labels(channel_type="market-stats").observe(time.time() - started_at)
 
 
 
 def parse_trade(msg):
+    started_at = time.time()
     try:
         push = msg["push"]
         channel = push["channel"]
@@ -118,11 +164,16 @@ def parse_trade(msg):
             "offset": offset
         }
 
+        PARSE_TOTAL.labels(channel_type="trades", outcome="success").inc()
         return record, "trades"
 
     except (KeyError, ValueError, TypeError) as e:
-        logger.error("parse_trade_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        log_parser.error("parse_trade_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        PARSE_TOTAL.labels(channel_type="trades", outcome="error").inc()
+        PARSE_ERRORS_TOTAL.labels(channel_type="trades", error_type=type(e).__name__).inc()
         return None, None
+    finally:
+        PARSE_DURATION_SECONDS.labels(channel_type="trades").observe(time.time() - started_at)
 
 
 
@@ -130,7 +181,9 @@ def parse(msg):
     try:
         channel = msg["push"]["channel"]
     except Exception as e:
-        logger.error("parse_root_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        log_parser.error("parse_root_failed", extra={"error": str(e), "msg": str(msg)[:200]})
+        PARSE_TOTAL.labels(channel_type="unknown", outcome="error").inc()
+        PARSE_ERRORS_TOTAL.labels(channel_type="unknown", error_type="root_malformed").inc()
         return None, None
 
     if "orderbook" in channel:
@@ -145,5 +198,7 @@ def parse(msg):
     if "trades" in channel:
         return parse_trade(msg)
 
-    logger.error("parse_unknown_channel", extra={"channel": channel, "msg": str(msg)[:200]})
+    log_parser.error("parse_unknown_channel", extra={"channel": channel, "msg": str(msg)[:200]})
+    PARSE_TOTAL.labels(channel_type="unknown", outcome="error").inc()
+    PARSE_ERRORS_TOTAL.labels(channel_type="unknown", error_type="unknown_channel").inc()
     return None, None

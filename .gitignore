@@ -1,12 +1,46 @@
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+.env.local
+
+# Editor junk
+.vscode/
+.idea/
+*.swp
+
+# OS junk
+.DS_Store
+
+# Logs
+logs/
 *.log
-*.db
-*.sqlite
-*.avro
-*.json
-.env
-.venv/
+
+# Docker
+docker-data/
+loki-data/
+prometheus-data/
+grafana-data/
+
+# Kafka local data
 kafka-data/
-tmp/
+zookeeper-data/
+
+# Cache directories
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Local configs
+config.local.json
 

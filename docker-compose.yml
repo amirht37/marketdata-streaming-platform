@@ -26,6 +26,23 @@
         - streaming-network
       restart: always
 
+    schema-registry:
+      image: confluentinc/cp-schema-registry:7.6.0
+      container_name: schema_registry
+      depends_on:
+        - kafka
+      ports:
+        - "8081:8081"
+      environment:
+        SCHEMA_REGISTRY_HOST_NAME: schema-registry
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+        SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      networks:
+        - streaming-network
+      restart: always
+
+
+
 
     kafka-ui:
       image: provectuslabs/kafka-ui:latest
@@ -67,13 +84,15 @@
         dockerfile: Dockerfile.producers  # Bakes your class-based async script
       depends_on:
         - kafka
+        - schema-registry
       ports:
         - "8000:8000"
+        - "9200:9200"
       environment:
-        # Match the exact internal bridge listener port defined above
-        - KAFKA_BROKER=kafka:29092 
-        - PYTHONUNBUFFERED=1 
+        - SCHEMA_REGISTRY_URL:http://schema-registry:8081
+        - SCHEMA_DIR:/app/schemas
         - PRODUCER_SCRIPT=main.py
+        - KAFKA_BOOTSTRAP_SERVERS:kafka:29092
       restart: always
       volumes:
         - ./logs:/app/logs
