@@ -5,9 +5,14 @@ scrape_configs:
   - job_name: 'producers'
     static_configs:
       - targets:
-          - nobitex-ingestion-engine-crypto-producer-1:9200
+          - crypto-producer:9200
 
   - job_name: 'cadvisor'
     static_configs:
-      - targets: ['cadvisor:8080']
+      - targets: ['cadvisor:8070']
+
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['172.17.0.1:9100']
 

@@ -51,12 +51,77 @@
         - "8090:8080"
       environment:
         KAFKA_CLUSTERS_0_NAME: local
+        KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
         KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
         KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
       depends_on:
         - kafka
       networks:
         - streaming-network
+
+
+    kafka-connect:
+      image: confluentinc/cp-kafka-connect:7.5.0
+      build: ./connectors
+      container_name: crypto-kafka-connect
+      ports:
+        - "8083:8083"
+      environment:
+        CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
+        CONNECT_REST_PORT: 8083
+        CONNECT_LISTENERS: "http://0.0.0.0:8083"
+        CONNECT_REST_ADVERTISED_LISTENERS: "http://kafka-connect:8083"
+        CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+        CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+
+        CONNECT_GROUP_ID: "kafka-connect-group"
+        CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+        CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+        CONNECT_STATUS_STORAGE_TOPIC: "connect-statuses"
+
+
+        CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+        CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+
+
+
+
+        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_DB: ${POSTGRES_DB}
+
+        
+        # Tells Kafka Connect where to find plugins (like the S3/MinIO sink)
+        CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+      volumes:
+        - kafka-connect-data:/var/lib/kafka/data
+      networks:
+        - streaming-network
+
+
+    iceberg-rest:
+
+      image: apache/iceberg-rest-fixture:latest
+      container_name: iceberg-rest
+      ports:
+        - "8181:8181"
+      environment:
+        CATALOG_WAREHOUSE: s3://warehouse/
+        CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+        CATALOG_S3_PATH__STYLE__ACCESS: "true"
+        CATALOG_S3_SSL__ENABLED: "false"  # if not using TLS
+        CATALOG_S3_ENDPOINT: http://minio:9000
+        AWS_ACCESS_KEY_ID: minioadmin
+        AWS_SECRET_ACCESS_KEY: miniopassword
+        AWS_REGION: mid-east-1
+      networks:
+          - streaming-network
+
+
 
 
 
@@ -79,6 +144,7 @@
         - streaming-network
     # --- THE PRODUCER (Async Network Worker) ---
     crypto-producer:
+      container_name: crypto-producer
       build:
         context: ./producers  # Looks at the root directory workspace
         dockerfile: Dockerfile.producers  # Bakes your class-based async script
@@ -100,30 +166,21 @@
       networks:
         - streaming-network
 
-   
-
-    x-consumer-base: &consumer-base
-      build:
-        context: ./consumers
-        dockerfile: Dockerfile
-      restart: always
+    minio:
+      image: minio/minio:latest
+      container_name: crypto-minio
+      ports:
+        - "9005:9000"
+        - "9001:9001"
+      environment:
+        MINIO_ROOT_USER: "minioadmin"
+        MINIO_ROOT_PASSWORD: "miniopassword"
+      volumes:
+        - minio-data:/data
+      command: server /data --console-address ":9001"
       networks:
         - streaming-network
-      environment:
-        POSTGRES_USER: crypto
-        POSTGRES_PASSWORD: crypto123
-        POSTGRES_DB: crypto_db
-        POSTGRES_HOST: postgres
-        POSTGRES_PORT: 5432
-        KAFKA_BOOTSTRAP: kafka:9092
-        SCHEMA_REGISTRY_URL: http://schema-registry:8081
 
-    orderbooks-postgres-consumer:
-      <<: *consumer-base
-      command: ["python", "consumers/postgres/orderbooks/app.py"]
-      depends_on:
-        - kafka
-        - postgres
 
       
 
@@ -131,6 +188,7 @@
 
     prometheus:
       image: prom/prometheus
+      container_name: crypto-prometheus
       ports:
         - "9090:9090"
       volumes:
@@ -142,7 +200,7 @@
     # ─── THE NEW COLUMNAR OLAP DATABASE (Stable LTS Branch) ───
     clickhouse:
       image: clickhouse/clickhouse-server:25.8
-      container_name: iot-clickhouse
+      container_name: crypto-clickhouse
       ports:
         - "8123:8123" # HTTP Interface for Grafana metrics scraping
         - "9000:9000" # Native TCP client connection port
@@ -174,16 +232,23 @@
       restart: unless-stopped
 
     cadvisor:
-      image: gcr.io/cadvisor/cadvisor:latest
+      image: gcr.io/cadvisor/cadvisor:v0.49.1
       container_name: cadvisor
       ports:
-        - "8080:8080"
+        - "8070:8070"
       volumes:
         - /:/rootfs:ro
         - /var/run:/var/run:ro
         - /sys:/sys:ro
         - /var/lib/docker/:/var/lib/docker:ro
+        - /dev/disk/:/dev/disk:ro
+        - /var/run/docker.sock:/var/run/docker.sock:ro  # <--- CRITICAL FOR DOCKER FACTORY
       restart: unless-stopped
+      command:
+        - '--port=8070'
+        - '--listen_ip=0.0.0.0'
+        - '-docker_only=true'
+        - '-housekeeping_interval=10s'
       networks:
         - streaming-network
 
@@ -199,21 +264,20 @@
         - GF_SECURITY_ADMIN_PASSWORD=admin
         - DB_PASSWORD=admin
       volumes:
-        - grafana_data:/var/lib/grafana
-        - ./dashboards:/etc/grafana/provisioning/dashboards
-        - ./dashboards/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      - grafana_data:/var/lib/grafana
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
       restart: unless-stopped
       networks:
         - streaming-network
     loki:
       image: grafana/loki:2.9.0
-      container_name: crypto-loki
+      container_name: crypto-lokidok
       ports:
         - "3100:3100"
       volumes:
         - ./loki/config.yaml:/etc/loki/config.yaml
-        - ./loki-data:/loki
-        - ./loki-data/wal:/wal
+        - loki-data:/loki
       command: -config.file=/etc/loki/config.yaml
       networks:
         - streaming-network
@@ -247,7 +311,15 @@
 
     postgres_data:
       driver: local
+    
+    loki-data:
+      driver: local
 
+    minio-data:
+      driver : local 
+
+    kafka-connect-data:
+      driver : local 
   networks:
     streaming-network:
       driver: bridge
