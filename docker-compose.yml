@@ -12,11 +12,13 @@
         - KAFKA_PROCESS_ROLES=broker,controller
         - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
         # ─── THE CRITICAL LISTENER FIX ───
+        - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+        - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
         # Define three distinct communication targets
         - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
         # Route container internal traffic on 29092 and external host terminal traffic on 127.0.0.1:9092
-        - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://127.0.0.1:9092
-        - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+        - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+        - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
         - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
         - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
         - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
@@ -25,6 +27,13 @@
       networks:
         - streaming-network
       restart: always
+    redis:
+      image: redis:8.10.1
+      container_name: crypto-redis
+      ports:
+        - "6379:6379"
+      networks:
+        - streaming-network
 
     schema-registry:
       image: confluentinc/cp-schema-registry:7.6.0
@@ -34,6 +43,8 @@
       ports:
         - "8081:8081"
       environment:
+        SCHEMA_REGISTRY_KAFKASTORE_TOPIC: "_schemas"
+        SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
         SCHEMA_REGISTRY_HOST_NAME: schema-registry
         SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
         SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
@@ -59,9 +70,41 @@
       networks:
         - streaming-network
 
+    orderbook-consumer:
+      build: ./consumers/orderbook   # points at a folder with its own Dockerfile
+      container_name: orderbook-consumer
+      environment:
+        KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+        KAFKA_ORDERBOOK_TOPIC: "orderbook"
+        SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+        POSTGRES_HOST: "postgres"
+        POSTGRES_PORT: "5432"
+        POSTGRES_DB: "exchange"
+        POSTGRES_USER: "postgres"
+        POSTGRES_PASSWORD: "yourpassword"
+      depends_on:
+        - kafka
+        - schema-registry
+        - postgres
+      networks:
+        - streaming-network
+
+    trades-consumer:
+      build: ./consumers/trades   # points at a folder with its own Dockerfile
+      container_name: trades-consumer
+      environment:
+        KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+        KAFKA_ORDERBOOK_TOPIC: "nobitex.trades"
+        SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      depends_on:
+        - kafka
+        - schema-registry
+        - postgres
+      networks:
+        - streaming-network
 
     kafka-connect:
-      image: confluentinc/cp-kafka-connect:7.5.0
+      image: confluentinc/cp-kafka-connect:7.6.1 # or 7.7.0
       build: ./connectors
       container_name: crypto-kafka-connect
       ports:
@@ -76,19 +119,27 @@
 
         CONNECT_GROUP_ID: "kafka-connect-group"
         CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+        CONNECT_CONFIG_STORAGE_CLEANUP_POLICY: "compact"
+        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+
+        CONNECT_OFFSET_STORAGE_CLEANUP_POLICY: "compact"
         CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
-        CONNECT_STATUS_STORAGE_TOPIC: "connect-statuses"
+        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+
+        CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+        CONNECT_STATUS_STORAGE_CLEANUP_POLICY: "compact"
+        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
 
 
         CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
         CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
 
 
+        AWS_REGION: "us-east-1"
+        AWS_ACCESS_KEY_ID: "minioadmin"
+        AWS_SECRET_ACCESS_KEY: "miniopassword"
 
 
-        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
-        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
-        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
 
         POSTGRES_USER: ${POSTGRES_USER}
         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -114,7 +165,7 @@
         CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
         CATALOG_S3_PATH__STYLE__ACCESS: "true"
         CATALOG_S3_SSL__ENABLED: "false"  # if not using TLS
-        CATALOG_S3_ENDPOINT: http://minio:9000
+        CATALOG_S3_ENDPOINT: http://crypto-minio:9000
         AWS_ACCESS_KEY_ID: minioadmin
         AWS_SECRET_ACCESS_KEY: miniopassword
         AWS_REGION: mid-east-1
@@ -171,13 +222,13 @@
       container_name: crypto-minio
       ports:
         - "9005:9000"
-        - "9001:9001"
+        - "9003:9003"
       environment:
         MINIO_ROOT_USER: "minioadmin"
         MINIO_ROOT_PASSWORD: "miniopassword"
       volumes:
         - minio-data:/data
-      command: server /data --console-address ":9001"
+      command: server /data --console-address ":9003"
       networks:
         - streaming-network
 
@@ -201,11 +252,11 @@
     clickhouse:
       image: clickhouse/clickhouse-server:25.8
       container_name: crypto-clickhouse
-      ports:
+      ports:  
         - "8123:8123" # HTTP Interface for Grafana metrics scraping
         - "9000:9000" # Native TCP client connection port
       environment:
-        - CLICKHOUSE_DB=crypto_telemetry
+        - CLICKHOUSE_DB=crypto_db
         - CLICKHOUSE_USER=clickhouse_admin
         - CLICKHOUSE_PASSWORD=clickhouse_secure_pass
       volumes:
@@ -213,6 +264,25 @@
       networks:
         - streaming-network
       restart: always
+
+    migrator:
+      build: ./migrator  # points at a folder with its own Dockerfile
+      container_name: migrator
+      environment:
+        - CLICKHOUSE_HOST=clickhouse
+        - CLICKHOUSE_DB=crypto_db
+        - CLICKHOUSE_USER=clickhouse_admin
+        - CLICKHOUSE_PASSWORD=clickhouse_secure_pass
+      depends_on:
+        - clickhouse
+      volumes:
+        - ./migrations:/app/migrations
+      networks:
+        - streaming-network
+
+
+
+
 
     node_exporter:
       image: prom/node-exporter:latest
