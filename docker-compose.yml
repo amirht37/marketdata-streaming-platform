@@ -90,7 +90,9 @@
         - streaming-network
 
     trades-consumer:
-      build: ./consumers/trades   # points at a folder with its own Dockerfile
+      build:
+        context: ./consumers
+        dockerfile: trades/Dockerfile
       container_name: trades-consumer
       environment:
         KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
@@ -100,6 +102,8 @@
         - kafka
         - schema-registry
         - postgres
+      volumes:
+        - ./logs:/app/logs
       networks:
         - streaming-network
 
