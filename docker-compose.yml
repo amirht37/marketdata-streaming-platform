@@ -86,6 +86,9 @@
         - kafka
         - schema-registry
         - postgres
+      volumes:
+        - ./logs:/app/logs
+        - ./consumers/shared:/app/shared
       networks:
         - streaming-network
 
@@ -113,6 +116,7 @@
       container_name: crypto-kafka-connect
       ports:
         - "8083:8083"
+        - "9404:9404"
       environment:
         CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
         CONNECT_REST_PORT: 8083
@@ -137,7 +141,8 @@
 
         CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
         CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
-
+        KAFKA_OPTS: >-
+          -javaagent:/opt/jmx_prometheus_javaagent.jar=9404:/etc/jmx-exporter/config.yml
 
         AWS_REGION: "us-east-1"
         AWS_ACCESS_KEY_ID: "minioadmin"
@@ -154,6 +159,7 @@
         CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       volumes:
         - kafka-connect-data:/var/lib/kafka/data
+        - ./monitoring/jmx-config.yml:/etc/jmx-exporter/config.yml:ro
       networks:
         - streaming-network
 
