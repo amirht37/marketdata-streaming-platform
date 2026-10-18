@@ -75,7 +75,7 @@
       container_name: orderbook-consumer
       environment:
         KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
-        KAFKA_ORDERBOOK_TOPIC: "orderbook"
+        KAFKA_TOPIC: "nobitex.orderbook"
         SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
         POSTGRES_HOST: "postgres"
         POSTGRES_PORT: "5432"
@@ -99,7 +99,7 @@
       container_name: trades-consumer
       environment:
         KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
-        KAFKA_ORDERBOOK_TOPIC: "nobitex.trades"
+        KAFKA_TOPIC: "nobitex.trades"
         SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
       depends_on:
         - kafka
