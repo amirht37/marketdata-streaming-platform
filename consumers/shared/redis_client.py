@@ -10,7 +10,7 @@ class RedisClient:
         self.client = redis.Redis(host=host, port=port, decode_responses=True)
 
     # --- plain wrappers ---
-    def add_to_stream(self, key, data, maxlen=None):
+    def add_to_stream(self, key, data, maxlen=50):
         return self.client.xadd(key, data, maxlen=maxlen, approximate=True)
 
     def zadd(self, key, mapping):

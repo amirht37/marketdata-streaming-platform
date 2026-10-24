@@ -6,7 +6,10 @@ from tradewriter import TradeWriter
 from datetime import datetime, timezone
 from deserializer import get_deserializer
 from shared.logger import get_logger
-
+from shared.consumer import get_consumer
+from shared.deserializer import get_deserializer
+from shared.logger import get_logger
+from shared.redis_client import RedisClient
 
 
 logger = get_logger('trades',to_console=True)
