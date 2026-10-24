@@ -1,0 +1,57 @@
+{
+  "name": "nobitex-multi-stream-iceberg-sink",
+  "config": {
+    "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+    "tasks.max": "4",
+    
+    "topics": "nobitex.candles,nobitex.market-stats,nobitex.trades,nobitex.orderbook",
+    "iceberg.tables": "nobitex.candles,nobitex.market-stats,nobitex.trades,nobitex.orderbook",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+
+    "iceberg.tables.auto-create-enabled": "true",
+    "iceberg.tables.evolve-schema-enabled": "true",
+
+    "transforms": "addKafkaMetadata,convertCandlesTs,convertTradesTs,convertOrderbookTs",
+
+    "transforms.addKafkaMetadata.type": "org.apache.kafka.connect.transforms.InsertField$Value",
+    "transforms.addKafkaMetadata.timestamp.field": "kafka_ingest_time",
+    "transforms.addKafkaMetadata.offset.field": "kafka_offset",
+
+    "transforms.convertCandlesTs.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.convertCandlesTs.field": "ts",
+    "transforms.convertCandlesTs.target.type": "Timestamp",
+    "transforms.convertCandlesTs.predicate": "isCandles",
+
+    "transforms.convertTradesTs.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.convertTradesTs.field": "ts",
+    "transforms.convertTradesTs.target.type": "Timestamp",
+    "transforms.convertTradesTs.predicate": "isTrades",
+
+    "transforms.convertOrderbookTs.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.convertOrderbookTs.field": "lastUpdate",
+    "transforms.convertOrderbookTs.target.type": "Timestamp",
+    "transforms.convertOrderbookTs.predicate": "isOrderbook",
+
+    "predicates": "isCandles,isTrades,isOrderbook",
+    "predicates.isCandles.type": "org.apache.kafka.connect.transforms.predicates.TopicNameMatches",
+    "predicates.isCandles.pattern": ".*candles.*",
+    "predicates.isTrades.type": "org.apache.kafka.connect.transforms.predicates.TopicNameMatches",
+    "predicates.isTrades.pattern": ".*trades.*",
+    "predicates.isOrderbook.type": "org.apache.kafka.connect.transforms.predicates.TopicNameMatches",
+    "predicates.isOrderbook.pattern": ".*orderbook.*",
+
+    "iceberg.catalog.type": "rest",
+    "iceberg.catalog.uri": "http://iceberg-rest:8181",
+    "iceberg.catalog.warehouse": "s3://warehouse/",
+    "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+    "iceberg.catalog.s3.endpoint": "http://crypto-minio:9000",
+    "iceberg.catalog.s3.path-style-access": "true",
+    "iceberg.catalog.s3.ssl.enabled": "false",
+    "iceberg.catalog.client.region": "mid-east-1",
+    "iceberg.catalog.s3.access-key-id": "minioadmin",
+    "iceberg.catalog.s3.secret-access-key": "miniopassword"
+  }
+}

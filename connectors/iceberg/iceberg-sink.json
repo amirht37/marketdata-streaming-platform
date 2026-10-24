@@ -1,0 +1,31 @@
+{
+  "name": "nobitex-trades-iceberg-sink",
+  "config": {
+    "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+    "tasks.max": "1",
+    "topics": "nobitex.trades",
+    
+    "iceberg.tables": "crypto.nobitex_trades",
+    "iceberg.tables.auto-create-enabled": "true",
+    "iceberg.tables.evolve-schema-enabled": "true",
+
+
+    "s3.region": "us-east-1",
+    "s3.endpoint": "http://crypto-minio:9000",
+    "s3.path-style-access": "true",
+    "iceberg.catalog.s3.access-key-id": "minioadmin",
+    "iceberg.catalog.s3.secret-access-key": "miniopassword",
+
+    "iceberg.catalog.type": "rest",
+    "iceberg.catalog.uri": "http://iceberg-rest:8181",
+    "iceberg.catalog.warehouse": "s3://warehouse/",
+    "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+
+    "iceberg.kafka.bootstrap.servers": "kafka:29092",
+    "iceberg.control.topic": "control-iceberg",
+
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter"
+  }
+}

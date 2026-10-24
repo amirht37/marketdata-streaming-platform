@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 from fastavro import writer
 from kafka import KafkaProducer
 
@@ -15,7 +16,7 @@ class BaseProducer:
 
         # Kafka producer instance
         self.producer = KafkaProducer(
-            bootstrap_servers=["localhost:9092"],
+            bootstrap_servers=[os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")],
             acks="all",
             retries=5,
             linger_ms=5,

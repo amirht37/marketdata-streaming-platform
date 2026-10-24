@@ -22,7 +22,7 @@ def get_consumer(group_id:str | None = None ,
 
 
     config = {
-        "bootstrap.servers":os.getenv("BOOTSTRAP_SERVER","kafka:29092"),
+        "bootstrap.servers":os.getenv("KAFKA_BOOTSTRAP_SERVERS", os.getenv("BOOTSTRAP_SERVER", "kafka:29092")),
         "group.id": group_id,
         "auto.offset.reset": "earliest"
     }

@@ -1,405 +1,407 @@
-  version: '3.8'
+services:
+  # --- THE BROKER (KRaft Mode Engine) ---
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka_broker
+    ports:
+      - "9092:9092" # Exposes the host listener channel directly to port 9092 on your laptop
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      # ─── THE CRITICAL LISTENER FIX ───
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      # Define three distinct communication targets
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      # Route container internal traffic on 29092 and external host terminal traffic on 127.0.0.1:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - streaming-network
+    restart: always
+  redis:
+    image: redis:8.10.1
+    container_name: crypto-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - streaming-network
 
-  services:
-    # --- THE BROKER (KRaft Mode Engine) ---
-    kafka:
-      image: apache/kafka:3.7.0
-      container_name: kafka_broker
-      ports:
-        - "9092:9092" # Exposes the host listener channel directly to port 9092 on your laptop
-      environment:
-        - KAFKA_NODE_ID=1
-        - KAFKA_PROCESS_ROLES=broker,controller
-        - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-        # ─── THE CRITICAL LISTENER FIX ───
-        - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-        - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-        # Define three distinct communication targets
-        - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-        # Route container internal traffic on 29092 and external host terminal traffic on 127.0.0.1:9092
-        - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-        - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
-        - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-        - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-        - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      volumes:
-        - kafka_data:/var/lib/kafka/data
-      networks:
-        - streaming-network
-      restart: always
-    redis:
-      image: redis:8.10.1
-      container_name: crypto-redis
-      ports:
-        - "6379:6379"
-      networks:
-        - streaming-network
-
-    schema-registry:
-      image: confluentinc/cp-schema-registry:7.6.0
-      container_name: schema_registry
-      depends_on:
-        - kafka
-      ports:
-        - "8081:8081"
-      environment:
-        SCHEMA_REGISTRY_KAFKASTORE_TOPIC: "_schemas"
-        SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
-        SCHEMA_REGISTRY_HOST_NAME: schema-registry
-        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
-        SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-      networks:
-        - streaming-network
-      restart: always
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    container_name: schema_registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: "_schemas"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - streaming-network
+    restart: always
 
 
 
 
-    kafka-ui:
-      image: provectuslabs/kafka-ui:latest
-      container_name: kafka-ui
-      ports:
-        - "8090:8080"
-      environment:
-        KAFKA_CLUSTERS_0_NAME: local
-        KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
-        KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-        KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
-      depends_on:
-        - kafka
-      networks:
-        - streaming-network
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+    depends_on:
+      - kafka
+    networks:
+      - streaming-network
 
-    orderbook-consumer:
-      build: ./consumers/orderbook   # points at a folder with its own Dockerfile
-      container_name: orderbook-consumer
-      environment:
-        KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
-        KAFKA_TOPIC: "nobitex.orderbook"
-        SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-        POSTGRES_HOST: "postgres"
-        POSTGRES_PORT: "5432"
-        POSTGRES_DB: "exchange"
-        POSTGRES_USER: "postgres"
-        POSTGRES_PASSWORD: "yourpassword"
-      depends_on:
-        - kafka
-        - schema-registry
-        - postgres
-      volumes:
-        - ./logs:/app/logs
-        - ./consumers/shared:/app/shared
-      networks:
-        - streaming-network
+  orderbook-consumer:
+    build: ./consumers/orderbook   # points at a folder with its own Dockerfile
+    container_name: orderbook-consumer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      KAFKA_TOPIC: "nobitex.orderbook"
+      SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    depends_on:
+      - kafka
+      - schema-registry
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+      - ./consumers/shared:/app/shared
+    networks:
+      - streaming-network
 
-    trades-consumer:
-      build:
-        context: ./consumers
-        dockerfile: trades/Dockerfile
-      container_name: trades-consumer
-      environment:
-        KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
-        KAFKA_TOPIC: "nobitex.trades"
-        SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-      depends_on:
-        - kafka
-        - schema-registry
-        - postgres
-      volumes:
-        - ./logs:/app/logs
-      networks:
-        - streaming-network
+  trades-consumer:
+    build:
+      context: ./consumers
+      dockerfile: trades/Dockerfile
+    container_name: trades-consumer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      KAFKA_TOPIC: "nobitex.trades"
+      SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+    depends_on:
+      - kafka
+      - schema-registry
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - streaming-network
 
-    kafka-connect:
-      image: confluentinc/cp-kafka-connect:7.6.1 # or 7.7.0
-      build: ./connectors
-      container_name: crypto-kafka-connect
-      ports:
-        - "8083:8083"
-        - "9404:9404"
-      environment:
-        CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
-        CONNECT_REST_PORT: 8083
-        CONNECT_LISTENERS: "http://0.0.0.0:8083"
-        CONNECT_REST_ADVERTISED_LISTENERS: "http://kafka-connect:8083"
-        CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
-        CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.6.1 # or 7.7.0
+    build: ./connectors
+    container_name: crypto-kafka-connect
+    ports:
+      - "8083:8083"
+      - "9404:9404"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
+      CONNECT_REST_PORT: 8083
+      CONNECT_LISTENERS: "http://0.0.0.0:8083"
+      CONNECT_REST_ADVERTISED_LISTENERS: "http://kafka-connect:8083"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
 
-        CONNECT_GROUP_ID: "kafka-connect-group"
-        CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
-        CONNECT_CONFIG_STORAGE_CLEANUP_POLICY: "compact"
-        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_GROUP_ID: "kafka-connect-group"
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+      CONNECT_CONFIG_STORAGE_CLEANUP_POLICY: "compact"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
 
-        CONNECT_OFFSET_STORAGE_CLEANUP_POLICY: "compact"
-        CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
-        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_CLEANUP_POLICY: "compact"
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
 
-        CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
-        CONNECT_STATUS_STORAGE_CLEANUP_POLICY: "compact"
-        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
-
-
-        CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
-        CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
-        KAFKA_OPTS: >-
-          -javaagent:/opt/jmx_prometheus_javaagent.jar=9404:/etc/jmx-exporter/config.yml
-
-        AWS_REGION: "us-east-1"
-        AWS_ACCESS_KEY_ID: "minioadmin"
-        AWS_SECRET_ACCESS_KEY: "miniopassword"
+      CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+      CONNECT_STATUS_STORAGE_CLEANUP_POLICY: "compact"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
 
 
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+      KAFKA_OPTS: >-
+        -javaagent:/opt/jmx_prometheus_javaagent.jar=9404:/etc/jmx-exporter/config.yml
 
-        POSTGRES_USER: ${POSTGRES_USER}
-        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-        POSTGRES_DB: ${POSTGRES_DB}
-
-        
-        # Tells Kafka Connect where to find plugins (like the S3/MinIO sink)
-        CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
-      volumes:
-        - kafka-connect-data:/var/lib/kafka/data
-        - ./monitoring/jmx-config.yml:/etc/jmx-exporter/config.yml:ro
-      networks:
-        - streaming-network
-
-
-    iceberg-rest:
-
-      image: apache/iceberg-rest-fixture:latest
-      container_name: iceberg-rest
-      ports:
-        - "8181:8181"
-      environment:
-        CATALOG_WAREHOUSE: s3://warehouse/
-        CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
-        CATALOG_S3_PATH__STYLE__ACCESS: "true"
-        CATALOG_S3_SSL__ENABLED: "false"  # if not using TLS
-        CATALOG_S3_ENDPOINT: http://crypto-minio:9000
-        AWS_ACCESS_KEY_ID: minioadmin
-        AWS_SECRET_ACCESS_KEY: miniopassword
-        AWS_REGION: mid-east-1
-      networks:
-          - streaming-network
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
+      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}"
+      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}"
 
 
 
-
-
-    postgres:
-      image: postgres:16
-      container_name: crypto-postgres
-      environment:
-        POSTGRES_USER: ${POSTGRES_USER}
-        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-        POSTGRES_DB: ${POSTGRES_DB}
-      volumes:
-       - postgres_data:/var/lib/postgresql/data
-      healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-        interval: 5s
-        timeout: 5s
-        retries: 10
-      restart: always
-      networks:
-        - streaming-network
-    # --- THE PRODUCER (Async Network Worker) ---
-    crypto-producer:
-      container_name: crypto-producer
-      build:
-        context: ./producers  # Looks at the root directory workspace
-        dockerfile: Dockerfile.producers  # Bakes your class-based async script
-      depends_on:
-        - kafka
-        - schema-registry
-      ports:
-        - "8000:8000"
-        - "9200:9200"
-      environment:
-        - SCHEMA_REGISTRY_URL:http://schema-registry:8081
-        - SCHEMA_DIR:/app/schemas
-        - PRODUCER_SCRIPT=main.py
-        - KAFKA_BOOTSTRAP_SERVERS:kafka:29092
-      restart: always
-      volumes:
-        - ./logs:/app/logs
-        - ./schemas:/app/schemas
-      networks:
-        - streaming-network
-
-    minio:
-      image: minio/minio:latest
-      container_name: crypto-minio
-      ports:
-        - "9005:9000"
-        - "9003:9003"
-      environment:
-        MINIO_ROOT_USER: "minioadmin"
-        MINIO_ROOT_PASSWORD: "miniopassword"
-      volumes:
-        - minio-data:/data
-      command: server /data --console-address ":9003"
-      networks:
-        - streaming-network
-
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
 
       
+      # Tells Kafka Connect where to find plugins (like the S3/MinIO sink)
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+    volumes:
+      - kafka-connect-data:/var/lib/kafka/data
+      - ./monitoring/jmx-config.yml:/etc/jmx-exporter/config.yml:ro
+    networks:
+      - streaming-network
 
 
+  iceberg-rest:
 
-    prometheus:
-      image: prom/prometheus
-      container_name: crypto-prometheus
-      ports:
-        - "9090:9090"
-      volumes:
-        - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
-      networks:
-        - streaming-network
-    # ─── THE NEW COLUMNAR OLAP DATABASE (Stable LTS Branch) ───
-    clickhouse:
-      image: clickhouse/clickhouse-server:25.8
-      container_name: crypto-clickhouse
-      ports:  
-        - "8123:8123" # HTTP Interface for Grafana metrics scraping
-        - "9000:9000" # Native TCP client connection port
-      environment:
-        - CLICKHOUSE_DB=crypto_db
-        - CLICKHOUSE_USER=clickhouse_admin
-        - CLICKHOUSE_PASSWORD=clickhouse_secure_pass
-      volumes:
-        - clickhouse_data:/var/lib/clickhouse
-      networks:
-        - streaming-network
-      restart: always
-
-    migrator:
-      build: ./migrator  # points at a folder with its own Dockerfile
-      container_name: migrator
-      environment:
-        - CLICKHOUSE_HOST=clickhouse
-        - CLICKHOUSE_DB=crypto_db
-        - CLICKHOUSE_USER=clickhouse_admin
-        - CLICKHOUSE_PASSWORD=clickhouse_secure_pass
-      depends_on:
-        - clickhouse
-      volumes:
-        - ./migrations:/app/migrations
-      networks:
+    image: apache/iceberg-rest-fixture:latest
+    container_name: iceberg-rest
+    ports:
+      - "8181:8181"
+    environment:
+      CATALOG_WAREHOUSE: s3://warehouse/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      CATALOG_S3_SSL__ENABLED: "false"  # if not using TLS
+      CATALOG_S3_ENDPOINT: http://crypto-minio:9000
+      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}"
+      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}"
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
+    networks:
         - streaming-network
 
 
 
 
 
-    node_exporter:
-      image: prom/node-exporter:latest
-      container_name: node_exporter
-      pid: host
-      network_mode: host
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
-      volumes:
-        - /proc:/host/proc:ro
-        - /sys:/host/sys:ro
-        - /:/rootfs:ro
-      command:
-        - '--path.procfs=/host/proc'
-        - '--path.sysfs=/host/sys'
-        - '--path.rootfs=/rootfs'
-      restart: unless-stopped
+  postgres:
+    image: postgres:16
+    container_name: crypto-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+    networks:
+      - streaming-network
+  # --- THE PRODUCER (Async Network Worker) ---
+  crypto-producer:
+    container_name: crypto-producer
+    build:
+      context: ./producers  # Looks at the root directory workspace
+      dockerfile: Dockerfile.producers  # Bakes your class-based async script
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8000:8000"
+      - "9200:9200"
+    environment:
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - SCHEMA_DIR=/app/schemas
+      - PRODUCER_SCRIPT=main.py
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    restart: always
+    volumes:
+      - ./logs:/app/logs
+      - ./schemas:/app/schemas
+    networks:
+      - streaming-network
 
-    cadvisor:
-      image: gcr.io/cadvisor/cadvisor:v0.49.1
-      container_name: cadvisor
-      ports:
-        - "8070:8070"
-      volumes:
-        - /:/rootfs:ro
-        - /var/run:/var/run:ro
-        - /sys:/sys:ro
-        - /var/lib/docker/:/var/lib/docker:ro
-        - /dev/disk/:/dev/disk:ro
-        - /var/run/docker.sock:/var/run/docker.sock:ro  # <--- CRITICAL FOR DOCKER FACTORY
-      restart: unless-stopped
-      command:
-        - '--port=8070'
-        - '--listen_ip=0.0.0.0'
-        - '-docker_only=true'
-        - '-housekeeping_interval=10s'
-      networks:
-        - streaming-network
-
-  
-      
-
-    grafana:
-      image: grafana/grafana-oss:latest
-      container_name: crypto-grafana
-      ports:
-        - "3001:3000"
-      environment:
-        - GF_SECURITY_ADMIN_PASSWORD=admin
-        - DB_PASSWORD=admin
-      volumes:
-      - grafana_data:/var/lib/grafana
-      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      restart: unless-stopped
-      networks:
-        - streaming-network
-    loki:
-      image: grafana/loki:2.9.0
-      container_name: crypto-lokidok
-      ports:
-        - "3100:3100"
-      volumes:
-        - ./loki/config.yaml:/etc/loki/config.yaml
-        - loki-data:/loki
-      command: -config.file=/etc/loki/config.yaml
-      networks:
-        - streaming-network
+  minio:
+    image: minio/minio:latest
+    container_name: crypto-minio
+    ports:
+      - "9005:9000"
+      - "9003:9003"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}"
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9003"
+    networks:
+      - streaming-network
 
 
-    promtail:
-      image: grafana/promtail:2.8.2
-      container_name: crypto-promtail
-      volumes:
-        - ./logs:/var/log/central_hub:ro     
-        - ./promtail:/etc/promtail
-      command: -config.file=/etc/promtail/config.yaml
-      user: "root"
-      restart: unless-stopped
-      depends_on:
-        - loki
-      networks:
-        - streaming-network
-
-
-
-  volumes:
-    kafka_data:
-      driver: local
-    # Permanent storage disk anchor for ClickHouse columnar metrics data
-    clickhouse_data:
-      driver: local
-
-    grafana_data:
-      driver: local
-
-    postgres_data:
-      driver: local
     
-    loki-data:
-      driver: local
 
-    minio-data:
-      driver : local 
 
-    kafka-connect-data:
-      driver : local 
-  networks:
-    streaming-network:
-      driver: bridge
+
+  prometheus:
+    image: prom/prometheus
+    container_name: crypto-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - streaming-network
+  # ─── THE NEW COLUMNAR OLAP DATABASE (Stable LTS Branch) ───
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    container_name: crypto-clickhouse
+    ports:  
+      - "8123:8123" # HTTP Interface for Grafana metrics scraping
+      - "9000:9000" # Native TCP client connection port
+    environment:
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-crypto_db}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse_admin}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - streaming-network
+    restart: always
+
+  migrator:
+    build: ./migrator  # points at a folder with its own Dockerfile
+    container_name: migrator
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-crypto_db}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse_admin}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+    depends_on:
+      - clickhouse
+    volumes:
+      - ./migrations:/app/migrations
+    networks:
+      - streaming-network
+
+
+
+
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    pid: host
+    network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    ports:
+      - "8070:8070"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # <--- CRITICAL FOR DOCKER FACTORY
+    restart: unless-stopped
+    command:
+      - '--port=8070'
+      - '--listen_ip=0.0.0.0'
+      - '-docker_only=true'
+      - '-housekeeping_interval=10s'
+    networks:
+      - streaming-network
+
+
+    
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: crypto-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+    volumes:
+    - grafana_data:/var/lib/grafana
+    - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+    - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    restart: unless-stopped
+    networks:
+      - streaming-network
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: crypto-lokidok
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/config.yaml
+    networks:
+      - streaming-network
+
+
+  promtail:
+    image: grafana/promtail:2.8.2
+    container_name: crypto-promtail
+    volumes:
+      - ./logs:/var/log/central_hub:ro     
+      - ./promtail:/etc/promtail
+    command: -config.file=/etc/promtail/config.yaml
+    user: "root"
+    restart: unless-stopped
+    depends_on:
+      - loki
+    networks:
+      - streaming-network
+
+
+
+volumes:
+  kafka_data:
+    driver: local
+  # Permanent storage disk anchor for ClickHouse columnar metrics data
+  clickhouse_data:
+    driver: local
+
+  grafana_data:
+    driver: local
+
+  postgres_data:
+    driver: local
+  
+  loki-data:
+    driver: local
+
+  minio-data:
+    driver : local 
+
+  kafka-connect-data:
+    driver : local 
+networks:
+  streaming-network:
+    driver: bridge

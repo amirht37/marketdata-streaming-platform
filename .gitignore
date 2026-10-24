@@ -1,13 +1,18 @@
+# ---- Secrets (NEVER commit) ----
+.env
+.env.*
+!.env.example
+
+# ---- Python virtual environments ----
+env/
+venv/
+.venv/
+
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Virtual environments
-venv/
-.env/
-.env.local
 
 # Editor junk
 .vscode/
@@ -16,18 +21,18 @@ venv/
 
 # OS junk
 .DS_Store
+Thumbs.db
+*:Zone.Identifier
 
 # Logs
 logs/
 *.log
 
-# Docker
+# Docker / local data
 docker-data/
 loki-data/
 prometheus-data/
 grafana-data/
-
-# Kafka local data
 kafka-data/
 zookeeper-data/
 
@@ -43,4 +48,3 @@ build/
 
 # Local configs
 config.local.json
-

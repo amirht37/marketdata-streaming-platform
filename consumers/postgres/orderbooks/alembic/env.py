@@ -1,4 +1,6 @@
+import os
 from logging.config import fileConfig
+from urllib.parse import quote_plus
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -8,6 +10,16 @@ from alembic import context
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Build the DB URL from environment variables (see .env.example)
+_user = os.environ["POSTGRES_USER"]
+_password = quote_plus(os.environ["POSTGRES_PASSWORD"])
+_host = os.environ.get("POSTGRES_HOST", "localhost")
+_port = os.environ.get("POSTGRES_PORT", "5432")
+_db = os.environ["POSTGRES_DB"]
+_url = f"postgresql+psycopg2://{_user}:{_password}@{_host}:{_port}/{_db}"
+# configparser treats % as special, so escape it
+config.set_main_option("sqlalchemy.url", _url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
