@@ -27,3 +27,8 @@ scrape_configs:
     static_configs:
       - targets: ["kafka-connect:9404"]
 
+
+  - job_name: 'orderbook_consumer'
+    static_configs:
+      - targets:
+          - orderbook-consumer:8001
