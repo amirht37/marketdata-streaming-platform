@@ -16,3 +16,19 @@ datasources:
     jsonData:
       maxLines: 1000
     isDefault: false             
+
+  - name: ClickHouse
+    uid: clickhouse-main
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: false
+    editable: false
+    jsonData:
+      host: ${CLICKHOUSE_HOST}
+      port: ${CLICKHOUSE_HTTP_PORT}
+      protocol: http
+      secure: false
+      username: ${CLICKHOUSE_USER}
+      defaultDatabase: ${CLICKHOUSE_DB}
+    secureJsonData:
+      password: ${CLICKHOUSE_PASSWORD}

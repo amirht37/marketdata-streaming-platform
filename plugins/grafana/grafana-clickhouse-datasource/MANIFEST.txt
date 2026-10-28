@@ -1,0 +1,46 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+{
+  "manifestVersion": "2.0.0",
+  "signatureType": "grafana",
+  "signedByOrg": "grafana",
+  "signedByOrgName": "Grafana Labs",
+  "plugin": "grafana-clickhouse-datasource",
+  "version": "4.23.2",
+  "time": 1792687228720,
+  "keyId": "7e4d0c6a708866e7",
+  "files": {
+    "module.js": "426d56a8529d0f751cd5566c1e6ce0ec865829129de9a6a36ceb55ddc8df00b3",
+    "dashboards/data-analysis.json": "21b7309f1fe23cc59af3c254d44c2cfcc4cfdbb194a494c50fd8be2f3f4dfabd",
+    "dashboards/otel-logs-explorer-json.json": "70d53cec6993a3ebedc8ceeda0c423c7bbfa2212cf02aaf8beb5cb3c973cd63c",
+    "dashboards/otel-logs-explorer.json": "a2f608facf73e40952e2900e58b54d99c0f842486df03b8d1d5a9f4f0ebd9276",
+    "dashboards/cluster-analysis.json": "8a680a1a3bd351f7b69d57f014362462d00aa4e14f1d10a27807ee0185d62dd4",
+    "dashboards/query-analysis.json": "a60de6ef77d48b5a42009cd9dfbca95636171ae6386f58b71152f43ed6f35780",
+    "dashboards/otel-traces-explorer.json": "321403f50213f4a468f5e22598371ad9815c8349a8f2f713517d38e871fc3750",
+    "dashboards/otel-service-dashboard.json": "fdf1f1adb4fc042ff02288d3f4d8720cd8c17948d7967d7cb2993951e5f9a633",
+    "dashboards/system-dashboards.json": "017881431af913d3c8f776b4dab51e8a153745b016a964bb1ec3c99f52704af4",
+    "gpx_clickhouse_linux_amd64": "20714688e3935b73b22aa5ca05a9eae2114c8162a32f7c8d93c280e55be74274",
+    "go_plugin_build_manifest": "f9d4f4df64897b133ecf91d5991ab5403b981e0662d4740679935268cafb2ab4",
+    "LICENSE": "cdd15e614b50e88443fe574ad56bde5ba697d958a45376431638eea816e3bfc3",
+    "README.md": "d4e3dbe61f39504d4592173f92f3cf7a2dd4a52ddaa5824d8fbb68ef177b4fbe",
+    "CHANGELOG.md": "9a93b8318e724f7f2c712b7ba8cf918826ac1c95dba23b0e9553444d4417f5e2",
+    "module.js.map": "eee637a23d124da5c79f8e004ef5a9b52cd41e9d6c1a940a33bc51de7b675aac",
+    "plugin.json": "62b946c9d4104f6adccb4f7c6bb2b4f790e3cc71537ea579521b23adb4e0471b",
+    "img/logo.svg": "838199055d86584ff105e5e91013203a6acb7d3f2061ae27678786125ab11f09",
+    "schema/v0alpha1.json": "e4a6fcc05b4ffd27a6103d9e67bad538612f4c010eeeb204116b57b9917927e1",
+    "schema/dsconfig.json": "ac9c18a8c125c083037898b802fa7d901130407aea4bec7a60fe42e3706deeeb",
+    "schema/v0alpha1/settings.json": "0d027de9cba6f2983a3d061e862d086684ab76bca4874add2c92c995d7ccf5c4",
+    "schema/v0alpha1/settings.examples.json": "0dda5af2c4204ab50b420dc75a7d8886ce28ee2d3d9e04a505db115291e1a3a7"
+  }
+}
+-----BEGIN PGP SIGNATURE-----
+
+wsA9BAETCgBtBYJq2jx8CRB+TQxqcIhm50UUAAAAAAAcACBzYWx0QG5vdGF0
+aW9ucy5vcGVucGdwanMub3JnAsnraQQwsYO0pvrOVDTNLc3Ullvm7qWwRZsK
+fElpJYwWIQTzOyW2kQdOhGNlcPN+TQxqcIhm5wAAHFUCBRxElTIPDTGoZrj2
+9P019G7n1z+3Dv4VzMoYmsRD9iifmXrGR/aLM3HrssdhTN7zIRKn2M/q4MsR
+fHlbRguav01IAgjpC1AtPDclOd0iMufWD59PuW/DiFcC3niiFEneTXjfJ0jD
+nd1H7ZvnRZsJKD1FkEmNoEtcsp0WFqcIAgnTQ4C7Og==
+=5gOR
+-----END PGP SIGNATURE-----

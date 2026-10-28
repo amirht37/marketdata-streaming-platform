@@ -1,0 +1,12 @@
+
+FROM grafana/grafana-oss:13.0.2
+
+USER root
+
+COPY --chown=472:0 plugins/grafana/grafana-clickhouse-datasource/ /opt/grafana-plugins/grafana-clickhouse-datasource/
+
+RUN chmod 755 /opt/grafana-plugins/grafana-clickhouse-datasource/gpx_clickhouse_linux_amd64
+
+ENV GF_PATHS_PLUGINS=/opt/grafana-plugins
+
+USER grafana
