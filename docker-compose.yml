@@ -397,15 +397,28 @@ services:
       - streaming-network
     restart: unless-stopped
 
+  loki-init:
+    image: grafana/loki:2.9.0
+    user: "0"
+    volumes:
+      - loki-data:/loki
+      - loki_wal:/wal
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown -R 10001:10001 /loki /wal"]
+
   loki:
     image: grafana/loki:2.9.0
-    container_name: crypto-lokidok
+    container_name: crypto-loki
     ports:
       - "3100:3100"
     volumes:
       - ./loki/config.yaml:/etc/loki/config.yaml
       - loki-data:/loki
+      - loki_wal:/wal
     command: -config.file=/etc/loki/config.yaml
+    depends_on:
+      loki-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready > /dev/null || exit 1"]
       interval: 15s
@@ -444,6 +457,7 @@ volumes:
   grafana_data:
   loki-data:
   kafka-connect-data:
+  loki_wal:
 
 networks:
   streaming-network:
